@@ -1,0 +1,9 @@
+# Ignore IDE-generated files
+.idea/
+
+# Ignore build directories
+_build*/
+
+# Ignore subprojects
+subprojects/graphene/
+subprojects/pango/
