@@ -40,6 +40,8 @@
 #include <gtk/a11y/gtkexpanderaccessible.h>
 #include <gtk/a11y/gtkflowboxaccessible.h>
 #include <gtk/a11y/gtkflowboxchildaccessible.h>
+#include <gtk/a11y/breaffy-flowboxaccessible.h>
+#include <gtk/a11y/breaffy-flowboxchildaccessible.h>
 #include <gtk/a11y/gtkframeaccessible.h>
 #include <gtk/a11y/gtkiconviewaccessible.h>
 #include <gtk/a11y/gtkimageaccessible.h>
