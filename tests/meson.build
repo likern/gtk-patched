@@ -42,6 +42,7 @@ gtk_tests = [
   ['testfilechooserbutton'],
   ['testflowbox'],
   ['breaffyflowbox'],
+  ['breaffyexperiments'],
   ['testfontchooser'],
   ['testfontoptions'],
   ['testframe'],
