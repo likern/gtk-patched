@@ -16,6 +16,8 @@
  */
 
 #include <gtk/gtk.h>
+#include <glib-object.h>
+#include <gmodule.h>
 
 enum {
   SIMPLE_ITEMS = 0,
@@ -31,14 +33,42 @@ enum {
 #define INITIAL_MAXIMUM_LENGTH  6
 #define INITIAL_CSPACING        2
 #define INITIAL_RSPACING        2
-#define N_ITEMS 1000
+#define N_ITEMS 20000
 
 static GtkFlowBox    *the_flowbox       = NULL;
 static gint           items_type       = SIMPLE_ITEMS;
 
+static void setup_name_property_for_flowbox(GtkWidget *widget)
+{
+  GValue* value = g_new0(GValue, 1);
+  g_value_init (value, G_TYPE_STRING);
+  g_value_set_static_string(value, "flowbox");
+
+
+  g_object_set_property(widget, "name", value);
+}
+
+static void setup_name_property_for_flowbox_child(GtkWidget *widget, long number)
+{
+  GString* gstring = g_string_new("flowbox-child-");
+  g_string_append_printf(gstring, "%ld", number);
+  char *property_value = g_string_free(gstring, FALSE);
+
+
+  GValue* value = g_new0 (GValue, 1);
+  g_value_init (value, G_TYPE_STRING);
+  g_value_take_string(value, property_value);
+
+  g_object_set_property(widget, "name", value);
+}
+
 static void
 populate_flowbox_simple (GtkFlowBox *flowbox)
 {
+
+//  g_object = (GObject *) flowbox;
+  setup_name_property_for_flowbox(flowbox);
+
   GtkWidget *widget, *frame;
   gint i;
 
@@ -48,8 +78,10 @@ populate_flowbox_simple (GtkFlowBox *flowbox)
 
       widget = gtk_label_new (text);
       frame  = gtk_frame_new (NULL);
+      setup_name_property_for_flowbox_child(frame, i);
       gtk_widget_show (widget);
       gtk_widget_show (frame);
+
 
       gtk_container_add (GTK_CONTAINER (frame), widget);
 
