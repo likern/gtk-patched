@@ -848,22 +848,31 @@ gtk_box_update_child_css_position (GtkBox      *box,
 {
   GtkBoxPrivate *priv = gtk_box_get_instance_private (box);
   GtkBoxChild *prev;
-  GSequenceIter *end = NULL;
+  GSequenceIter *begin = NULL, *end = NULL;
   gboolean reverse;
 
   prev = NULL;
+  begin = g_sequence_get_begin_iter(priv->children);
   end = g_sequence_get_end_iter(priv->children);
-  for (GSequenceIter *cur = g_sequence_get_begin_iter(priv->children);
-       cur != end;
-       cur = g_sequence_iter_next(cur))
+  while (end != begin)
+  {
+    end = g_sequence_iter_prev(end);
+    GtkBoxChild *end_child_info = g_sequence_get(end);
+    if (end_child_info == child_info)
     {
-      GtkBoxChild *cur_info = g_sequence_get(cur);
-      if (cur_info != child_info)
-        continue;
-
-      if (cur_info->pack == child_info->pack)
-        prev = cur_info;
+      /* Found child_info in box's children */
+      /* end iterator now points to it */
+      break;
     }
+  }
+
+  if (end != begin)
+  {
+    GSequenceIter *prev_iter = g_sequence_iter_prev(end);
+    GtkBoxChild *prev_child_info = g_sequence_get(prev_iter);
+    if (prev_child_info->pack == child_info->pack)
+      prev = prev_child_info;
+  }
 
   reverse = child_info->pack == GTK_PACK_END;
   if (priv->orientation == GTK_ORIENTATION_HORIZONTAL &&
