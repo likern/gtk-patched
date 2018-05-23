@@ -23,7 +23,7 @@
 
 G_BEGIN_DECLS
 
-GList      *_gtk_box_get_children       (GtkBox         *box);
+GSequence *_gtk_box_get_children       (GtkBox         *box);
 
 G_END_DECLS
 
