@@ -132,10 +132,11 @@ gtk_css_node_set_invalid (GtkCssNode *node,
 
   if (node->visible)
     {
-      if (node->parent)
+      GtkCssNode *parent = gtk_css_node_get_parent (node);
+      if (parent)
         {
           if (invalid)
-            gtk_css_node_set_invalid (node->parent, TRUE);
+            gtk_css_node_set_invalid (parent, TRUE);
         }
       else
         {
@@ -230,10 +231,17 @@ gtk_css_node_dispose (GObject *object)
 {
   GtkCssNode *cssnode = GTK_CSS_NODE (object);
 
-  while (cssnode->first_child)
-    {
-      gtk_css_node_set_parent (cssnode->first_child, NULL);
-    }
+  GSequenceIter *end_child_it = g_sequence_get_end_iter (cssnode->children);
+  GSequenceIter *first_child_it = g_sequence_get_begin_iter (cssnode->children);
+
+  /* Should we set only first child's parent to NULL? */
+  /* Or iterate over all children of cssnode?  */
+  if (first_child_it != end_child_it)
+  {
+    /* Set only first child's parent to NULL */
+    first_child = g_sequence_get (first_child_it);
+    gtk_css_node_set_parent (first_child, NULL);
+  }
 
   gtk_css_node_set_invalid (cssnode, FALSE);
   
@@ -270,9 +278,29 @@ gtk_css_node_is_first_child (GtkCssNode *node)
 }
 
 static gboolean
+gtk_css_node_has_next_visible_sibling(GtkCssNode *node)
+{
+
+}
+
+static gboolean
 gtk_css_node_is_last_child (GtkCssNode *node)
 {
   GtkCssNode *iter;
+
+
+  GSequenceIter* cur_sibl_it = g_sequence_get_begin_iter (node->siblings);
+  GSequenceIter* end_sibl_it = g_sequence_get_end_iter (node->siblings);
+
+  while (cur_child_it != end_child_it)
+  {
+    child_change = child->pending_changes;
+    gtk_css_node_invalidate (child, change);
+    if (child->visible)
+      change |= _gtk_css_change_for_sibling (child_change);
+
+    cur_child_it = g_sequence_iter_next (curr_child_it);
+  }
 
   for (iter = node->next_sibling;
        iter != NULL;
@@ -288,9 +316,7 @@ static gboolean
 may_use_global_parent_cache (GtkCssNode *node)
 {
   GtkStyleProvider *provider;
-  GtkCssNode *parent;
-  
-  parent = gtk_css_node_get_parent (node);
+  GtkCssNode *parent = gtk_css_node_get_parent (node);
   if (parent == NULL)
     return FALSE;
 
@@ -305,9 +331,7 @@ static GtkCssStyle *
 lookup_in_global_parent_cache (GtkCssNode                  *node,
                                const GtkCssNodeDeclaration *decl)
 {
-  GtkCssNode *parent;
-
-  parent = node->parent;
+  GtkCssNode *parent = gtk_css_node_get_parent (node);
 
   if (parent == NULL ||
       !may_use_global_parent_cache (node))
@@ -332,11 +356,9 @@ store_in_global_parent_cache (GtkCssNode                  *node,
                               const GtkCssNodeDeclaration *decl,
                               GtkCssStyle                 *style)
 {
-  GtkCssNode *parent;
-
   g_assert (GTK_IS_CSS_STATIC_STYLE (style));
 
-  parent = node->parent;
+  GtkCssNode *parent = gtk_css_node_get_parent (node);
 
   if (parent == NULL ||
       !may_use_global_parent_cache (node))
@@ -366,7 +388,8 @@ gtk_css_node_create_style (GtkCssNode *cssnode)
   if (style)
     return g_object_ref (style);
 
-  parent = cssnode->parent ? cssnode->parent->style : NULL;
+  GtkCssNode *parent_css_node = gtk_css_node_get_parent (cssnode);
+  parent = parent_css_node ? parent_css_node->style : NULL;
 
   if (gtk_css_node_init_matcher (cssnode, &matcher))
     style = gtk_css_static_style_new_compute (gtk_css_node_get_style_provider (cssnode),
@@ -899,27 +922,9 @@ gtk_css_node_get_parent (GtkCssNode *cssnode)
 }
 
 GtkCssNode *
-gtk_css_node_get_first_child (GtkCssNode *cssnode)
-{
-  return cssnode->first_child;
-}
-
-GtkCssNode *
-gtk_css_node_get_last_child (GtkCssNode *cssnode)
-{
-  return cssnode->last_child;
-}
-
-GtkCssNode *
 gtk_css_node_get_previous_sibling (GtkCssNode *cssnode)
 {
   return cssnode->previous_sibling;
-}
-
-GtkCssNode *
-gtk_css_node_get_next_sibling (GtkCssNode *cssnode)
-{
-  return cssnode->next_sibling;
 }
 
 static gboolean
@@ -965,15 +970,18 @@ gtk_css_node_propagate_pending_changes (GtkCssNode *cssnode,
   if (!cssnode->needs_propagation && change == 0)
     return;
 
-  for (child = gtk_css_node_get_first_child (cssnode);
-       child;
-       child = gtk_css_node_get_next_sibling (child))
-    {
-      child_change = child->pending_changes;
-      gtk_css_node_invalidate (child, change);
-      if (child->visible)
-        change |= _gtk_css_change_for_sibling (child_change);
-    }
+  GSequenceIter* cur_child_it = g_sequence_get_begin_iter (cssnode->children);
+  GSEquenceIter* end_child_it = g_sequence_get_end_iter (cssnode->children);
+
+  while (cur_child_it != end_child_it)
+  {
+    child_change = child->pending_changes;
+    gtk_css_node_invalidate (child, change);
+    if (child->visible)
+      change |= _gtk_css_change_for_sibling (child_change);
+
+    cur_child_it = g_sequence_iter_next (curr_child_it);
+  }
 
   cssnode->needs_propagation = FALSE;
 }
@@ -993,8 +1001,9 @@ gtk_css_node_ensure_style (GtkCssNode *cssnode,
   if (!gtk_css_node_needs_new_style (cssnode))
     return;
 
-  if (cssnode->parent)
-    gtk_css_node_ensure_style (cssnode->parent, current_time);
+  GtkCssNode *parent = gtk_css_node_get_parent(cssnode);
+  if (parent)
+    gtk_css_node_ensure_style (parent, current_time);
 
   if (cssnode->style_is_invalid)
     {
@@ -1051,16 +1060,17 @@ gtk_css_node_set_visible (GtkCssNode *cssnode,
 
   if (cssnode->invalid)
     {
+      GtkCssNode *parent = gtk_css_node_get_parent (cssnode);
       if (cssnode->visible)
         {
-          if (cssnode->parent)
-            gtk_css_node_set_invalid (cssnode->parent, TRUE);
+          if (parent)
+            gtk_css_node_set_invalid (parent, TRUE);
           else
             GTK_CSS_NODE_GET_CLASS (cssnode)->queue_validate (cssnode);
         }
       else
         {
-          if (cssnode->parent == NULL)
+          if (parent)
             GTK_CSS_NODE_GET_CLASS (cssnode)->dequeue_validate (cssnode);
         }
     }
@@ -1094,6 +1104,7 @@ gtk_css_node_set_visible (GtkCssNode *cssnode,
                 break;
             }
         }
+      GtkCssNode *parent = gtk_css_node_get_parent(cssnode);
       gtk_css_node_invalidate (cssnode->parent->first_child, GTK_CSS_CHANGE_NTH_LAST_CHILD);
     }
 }
@@ -1325,8 +1336,9 @@ gtk_css_node_invalidate (GtkCssNode   *cssnode,
 
   GTK_CSS_NODE_GET_CLASS (cssnode)->invalidate (cssnode);
 
-  if (cssnode->parent)
-    cssnode->parent->needs_propagation = TRUE;
+  GtkCssNode *parent = gtk_css_node_get_parent (cssnode);
+  if (parent)
+    parent->needs_propagation = TRUE;
   gtk_css_node_invalidate_style (cssnode);
 }
 
@@ -1348,13 +1360,14 @@ gtk_css_node_validate_internal (GtkCssNode *cssnode,
 
   GTK_CSS_NODE_GET_CLASS (cssnode)->validate (cssnode);
 
-  for (child = gtk_css_node_get_first_child (cssnode);
-       child;
-       child = gtk_css_node_get_next_sibling (child))
-    {
-      if (child->visible)
-        gtk_css_node_validate_internal (child, timestamp);
-    }
+  GSequenceIter* cur_child_it = g_sequence_get_begin_iter (cssnode->children);
+  GSEquenceIter* end_child_it = g_sequence_get_end_iter (cssnode->children);
+
+  while (cur_child_it != end_child_it)
+  {
+    if (child->visible)
+      gtk_css_node_validate_internal (child, timestamp);
+  }
 }
 
 void
@@ -1395,8 +1408,9 @@ gtk_css_node_get_style_provider (GtkCssNode *cssnode)
   if (result)
     return result;
 
-  if (cssnode->parent)
-    return gtk_css_node_get_style_provider (cssnode->parent);
+  GtkCssNode *parent = gtk_css_node_get_parent (cssnode);
+  if (parent)
+    return gtk_css_node_get_style_provider (parent);
 
   return GTK_STYLE_PROVIDER (_gtk_settings_get_style_cascade (gtk_settings_get_default (), 1));
 }
@@ -1428,10 +1442,18 @@ gtk_css_node_print (GtkCssNode                *cssnode,
     {
       GtkCssNode *node;
 
-      if (need_newline && gtk_css_node_get_first_child (cssnode))
-        g_string_append_c (string, '\n');
+      GSequenceIter* cur_child_it = g_sequence_get_begin_iter (cssnode->children);
+      GSEquenceIter* end_child_it = g_sequence_get_end_iter (cssnode->children);
 
-      for (node = gtk_css_node_get_first_child (cssnode); node; node = gtk_css_node_get_next_sibling (node))
+      if (need_newline && (cur_child_it != end_child_it))
+      {
+        g_string_append_c (string, '\n');
+      }
+
+      while (cur_child_it != end_child_it)
+      {
+        node = g_sequence_get(cur_child_it);
         gtk_css_node_print (node, flags, string, indent + 2);
+      }
     }
 }

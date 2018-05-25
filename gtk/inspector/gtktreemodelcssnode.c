@@ -50,12 +50,14 @@ static GtkCssNode *
 get_nth_child (GtkCssNode *node,
                gint        i)
 {
-  for (node = gtk_css_node_get_first_child (node);
-       node != NULL && i > 0;
-       node = gtk_css_node_get_next_sibling (node))
-    i--;
+  GSequenceIter *end_it = g_sequence_get_end_iter (node->children);
+  GSequenceIter *child_it = g_sequence_get_iter_at_pos (node->children);
 
-  return node;
+  GtkCssNode *result = NULL;
+  if (child_it != end_it)
+    result = g_sequence_get(child_it);
+
+  return result;
 }
 
 static int
@@ -216,7 +218,7 @@ gtk_tree_model_css_node_iter_children (GtkTreeModel *tree_model,
 {
   GtkTreeModelCssNode *nodemodel = GTK_TREE_MODEL_CSS_NODE (tree_model);
   GtkTreeModelCssNodePrivate *priv = nodemodel->priv;
-  GtkCssNode *node;
+  GtkCssNode *node = NULL;
 
   if (parent == NULL)
     {
@@ -225,8 +227,15 @@ gtk_tree_model_css_node_iter_children (GtkTreeModel *tree_model,
   else
     {
       node = gtk_tree_model_css_node_get_node_from_iter (nodemodel, parent);
-      node = gtk_css_node_get_first_child (node);
+
+      GSequenceIter *end_it = g_sequence_get_end_iter (node->children);
+      GSequenceIter *node_it = g_sequence_get_begin_iter (node->children);
+      if (node_it != end_it)
+      {
+        node = g_sequence_get (node_it);
+      }
     }
+
   if (node == NULL)
     return FALSE;
 
@@ -243,7 +252,7 @@ gtk_tree_model_css_node_iter_has_child (GtkTreeModel *tree_model,
 
   node = gtk_tree_model_css_node_get_node_from_iter (nodemodel, iter);
 
-  return gtk_css_node_get_first_child (node) != NULL;
+  return !g_sequence_is_empty (node->children);
 }
 
 static gint
@@ -259,8 +268,7 @@ gtk_tree_model_css_node_iter_n_children (GtkTreeModel *tree_model,
 
   node = gtk_tree_model_css_node_get_node_from_iter (nodemodel, iter);
 
-  node = gtk_css_node_get_last_child (node);
-  if (node == NULL)
+  if (g_sequence_is_empty(node->children))
     return 0;
 
   return get_node_index (node) + 1;
@@ -470,6 +478,7 @@ gtk_tree_model_css_node_connect_node (GtkTreeModelCssNode *model,
                                       gboolean             emit_signal)
 {
   GtkCssNode *child;
+  GSequenceIter *child_it = NULL, *end_it = NULL;
 
   if (GTK_IS_CSS_TRANSIENT_NODE (node))
     return;
@@ -481,12 +490,15 @@ gtk_tree_model_css_node_connect_node (GtkTreeModelCssNode *model,
   g_signal_connect_after (node, "notify", G_CALLBACK (notify_cb), model);
   g_signal_connect_after (node, "style-changed", G_CALLBACK (style_changed_cb), model);
 
-  for (child = gtk_css_node_get_first_child (node);
-       child;
-       child = gtk_css_node_get_next_sibling (child))
-    {
-      gtk_tree_model_css_node_connect_node (model, child, FALSE);
-    }
+  end_it = g_sequence_get_end_iter (node->children);
+  child_it = g_sequence_get_begin_iter (node->children);
+
+  while (child_it != end_it)
+  {
+    child = g_sequence_get (child_it);
+    gtk_tree_model_css_node_connect_node (model, child, FALSE);
+    child_it = g_sequence_iter_next (child_it);
+  }
 
   if (emit_signal)
     {
@@ -507,7 +519,8 @@ gtk_tree_model_css_node_connect_node (GtkTreeModelCssNode *model,
       gtk_tree_model_css_node_get_iter_from_node (model, &iter, node);
       path = gtk_tree_model_css_node_get_path (GTK_TREE_MODEL (model), &iter);
       gtk_tree_model_row_inserted (GTK_TREE_MODEL (model), path, &iter);
-      if (gtk_css_node_get_first_child (node))
+
+      if (!g_sequence_is_empty(node->children))
         gtk_tree_model_row_has_child_toggled (GTK_TREE_MODEL (model), path, &iter);
 
       gtk_tree_path_free (path);
@@ -522,6 +535,7 @@ gtk_tree_model_css_node_disconnect_node (GtkTreeModelCssNode *model,
                                          GtkCssNode          *previous)
 {
   GtkCssNode *child;
+  GSequenceIter *child_it = NULL, *end_it = NULL;
 
   if (GTK_IS_CSS_TRANSIENT_NODE (node))
     return;
@@ -531,12 +545,16 @@ gtk_tree_model_css_node_disconnect_node (GtkTreeModelCssNode *model,
   g_signal_handlers_disconnect_by_func (node, G_CALLBACK (notify_cb), model);
   g_signal_handlers_disconnect_by_func (node, G_CALLBACK (style_changed_cb), model);
 
-  for (child = gtk_css_node_get_first_child (node);
-       child;
-       child = gtk_css_node_get_next_sibling (child))
-    {
-      gtk_tree_model_css_node_disconnect_node (model, child, FALSE, NULL, NULL);
-    }
+
+  end_it = g_sequence_get_end_iter (node->children);
+  child_it = g_sequence_get_begin_iter (node->children);
+
+  while (child_it != end_it)
+  {
+    child = g_sequence_get (child_it);
+    gtk_tree_model_css_node_disconnect_node (model, child, FALSE, NULL, NULL);
+    child_it = g_sequence_iter_next (child_it);
+  }
 
   if (emit_signal)
     {
@@ -559,7 +577,7 @@ gtk_tree_model_css_node_disconnect_node (GtkTreeModelCssNode *model,
 
       gtk_tree_model_row_deleted (GTK_TREE_MODEL (model), path);
 
-      if (parent && gtk_css_node_get_first_child (parent) == NULL)
+      if (parent && g_sequence_is_empty(parent->children))
         {
           gtk_tree_path_up (path);
           gtk_tree_model_row_has_child_toggled (GTK_TREE_MODEL (model), path, &iter);

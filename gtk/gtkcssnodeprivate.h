@@ -40,8 +40,11 @@ struct _GtkCssNode
   GObject object;
 
   GtkCssNode *parent;
+  GSequence *children;
+  GSequence *siblings;
   GtkCssNode *previous_sibling;
   GtkCssNode *next_sibling;
+  GtkCssNode *last_sibling;
   GtkCssNode *first_child;
   GtkCssNode *last_child;
 
@@ -108,8 +111,6 @@ void                    gtk_css_node_insert_before      (GtkCssNode            *
 void                    gtk_css_node_reverse_children   (GtkCssNode            *cssnode);
 
 GtkCssNode *            gtk_css_node_get_parent         (GtkCssNode            *cssnode);
-GtkCssNode *            gtk_css_node_get_first_child    (GtkCssNode            *cssnode);
-GtkCssNode *            gtk_css_node_get_last_child     (GtkCssNode            *cssnode);
 GtkCssNode *            gtk_css_node_get_previous_sibling(GtkCssNode           *cssnode);
 GtkCssNode *            gtk_css_node_get_next_sibling   (GtkCssNode            *cssnode);
 
